@@ -1,13 +1,22 @@
 -module(client).
-
--export([start/0,stop/0,append/1,get/0]).
-
+-export([start/1,stop/0,append/1,get/0]).
 -export([handler/3]).
 
-start() ->
-    register(handler, spawn(?MODULE, handler, [0, nodes(hidden), []])).
+start(Node) ->
+    net_kernel:connect_node(Node),
+    {clientReceiver, Node} ! {nodeListRequest, self()},
+    receive
+        {nodeListRes, Nodes} ->
+            lists:foreach(fun(X) ->
+                    net_kernel:connect_node(X)
+                end, Nodes),
+            register(handler, spawn(?MODULE, handler, [0, nodes(hidden), []]))
+    end.
 
 stop() ->
+    lists:foreach(fun(X) ->
+                    net_kernel:disconnect(X)
+                end, nodes(hidden)),
     handler ! fin,
     unregister(handler).
 
