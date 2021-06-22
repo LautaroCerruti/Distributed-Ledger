@@ -25,6 +25,7 @@ stop() ->
 
 makeGet({Pid, C}) ->
     ledgerHandler ! {get, self()},
+    io:format("ENVIO LEDGER A CLIENTE ~p ~p ~n", [Pid, C]),
     receive
         Ledger -> Pid ! {C, getRes, Ledger}
     end.
@@ -41,7 +42,9 @@ loopGet(GetPending) ->
                 false -> loopGet(GetPending)
             end;
         fin -> ok;
-        _ -> loopGet(GetPending)
+        _ ->  
+            io:format("RECV CUALCA GET ~n"),
+            loopGet(GetPending)
     end.
 
 makeAppend(Id, Data) ->
@@ -61,20 +64,25 @@ loopAppend(AppendPending) ->
         {delete, {Pid, C}, Data} ->
             case lists:member({Pid, C}, AppendPending) of
                 true -> 
+                    io:format("RESPONDO ACK LUEGO DE HABER APPENDEADO ~p ~p ~p ~n", [Pid, C, Data]),
                     Pid ! {C, appendResACK, Data},
                     loopAppend(lists:delete({Pid, C}, AppendPending));
                 false -> loopAppend(AppendPending)
             end;
         fin -> ok;
-        _ -> loopAppend(AppendPending)
+        _ -> 
+            io:format("RECV CUALCA APPEND ~n"),
+            loopAppend(AppendPending)
     end.
 
 loopLedger(Ledger) ->
     receive
-        {get, Pid} -> 
+        {get, Pid} ->  
+            io:format("HAGO GET ~n"),
             Pid ! Ledger,
             loopLedger(Ledger);
         {append, Pid, Id, Data} ->
+            io:format("HAGO APPEND ~p ~p ~n", [Id, Data]),
             case lists:keyfind(Id, 1, Ledger) of
                 false -> 
                     Pid ! true,
@@ -84,7 +92,9 @@ loopLedger(Ledger) ->
                     loopLedger(Ledger)
             end;
         fin -> ok;
-        _ -> loopLedger(Ledger)
+        _ -> 
+            io:format("RECV CUALCA LEDGER ~n"),
+            loopLedger(Ledger)
     end.
 
 loopOperations() ->
@@ -96,20 +106,25 @@ loopOperations() ->
             appendHandler ! {append, Id, Data},
             loopOperations();
         fin -> ok;
-        _ -> loopOperations()
+        _ -> 
+            io:format("RECV CUALCA MSG ~n"),
+            loopOperations()
     end.
 
 clientReceiver() ->
     receive
         {getRequest, Pid, C} -> 
+            io:format("RECIBI UNA GET REQUEST ~p ~p ~n", [Pid, C]),
             spawn(aBroadcast, atomicBroadcast, [{{Pid, C}, node()}, get]),
             getHandler ! {add, {Pid, C}},
             clientReceiver();
         {appendRequest, Pid, C, Data} -> 
+            io:format("RECIBI UNA APPEND REQUEST ~p ~p ~p ~n", [Pid, C, Data]),
             spawn(aBroadcast, atomicBroadcast, [{{Pid, C}, node()}, {append, Data}]),
             appendHandler ! {add, {Pid, C}},
             clientReceiver();
         {nodeListRequest, Pid}-> 
+            io:format("ENVIO LISTA DE NODOS A NUEVO CLIENTE ~p ~n", [Pid]),
             Pid ! {nodeListRes, nodes()},
             clientReceiver();
         fin -> ok;
