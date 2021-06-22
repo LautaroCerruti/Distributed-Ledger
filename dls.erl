@@ -102,11 +102,11 @@ loopOperations() ->
 clientReceiver() ->
     receive
         {getRequest, Pid, C} -> 
-            spawn(atomicbroadcast, atomicBroadcast, [{Pid, C, node()}, get]),
+            spawn(aBroadcast, atomicBroadcast, [{{Pid, C}, node()}, get]),
             getHandler ! {add, {Pid, C}},
             clientReceiver();
         {appendRequest, Pid, C, Data} -> 
-            spawn(atomicbroadcast, atomicBroadcast, [{Pid, C, node()}, {append, Data}]),
+            spawn(aBroadcast, atomicBroadcast, [{{Pid, C}, node()}, {append, Data}]),
             appendHandler ! {add, {Pid, C}},
             clientReceiver();
         {nodeListRequest, Pid}-> 

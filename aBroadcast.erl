@@ -1,17 +1,20 @@
 -module(aBroadcast).
 -export([start/0, stop/0]).
--export([loopPQueue/3, serverReceiver/0]).
+-export([loopPQueue/3, serverReceiver/0, nodesMonitor/0]).
 -export([atomicBroadcast/2, propose/3]).
 
 start() ->
     register(pQueue, spawn(?MODULE, loopPQueue, [[], 0, 0])),
-    register(serverReceiver, spawn(?MODULE, serverReceiver, [])).
+    register(serverReceiver, spawn(?MODULE, serverReceiver, [])),
+    register(nodesMonitor, spawn(?MODULE, nodesMonitor, [])).
 
 stop() ->
     pQueue ! fin,
     serverReceiver ! fin,
+    nodesMonitor ! fin,
     unregister(pQueue),
-    unregister(serverReceiver).
+    unregister(serverReceiver),
+    unregister(nodesMonitor).
 
 queueReceiver(Q, A, P) ->
     receive
@@ -21,6 +24,8 @@ queueReceiver(Q, A, P) ->
             loopPQueue(Q++[{Id, Msg, {Prop, node()}, false}], A, Prop);
         {agree, Id, Msg, {A1, A2}} ->
             loopPQueue(orderedInsert({Id, Msg, {A1, A2}, true}, lists:keydelete(Id, 1, Q)), max(A, A1), P);
+        {delete, Who} ->
+            loopPQueue(deleteMsgs(Who, Q), A, P);
         fin -> ok;
         _ -> io:format("RECV CUALCA QUEUE ~n")
     end.
@@ -29,11 +34,20 @@ loopPQueue(Q, A, P) ->
     if length(Q) /= 0 -> 
         [{Idc, Msgc, _, State}|Qt] = Q,
         if State -> 
-            msgsHandler ! {Idc, Msjc},
+            msgsHandler ! {Idc, Msgc},
             loopPQueue(Qt, A, P);
             true -> queueReceiver(Q, A, P)
         end;
         true -> queueReceiver(Q, A, P)
+    end.
+
+deleteMsgs(_, []) ->
+    [];
+deleteMsgs(Who1, [{{Id, Who2}, Msg, Prop, State}|Qt]) ->
+    io:format("Comparandado ~p ~p ~n", [Who1, Who2]),
+    if not State and Who1 == Who2 ->
+        deleteMsgs(Who1, Qt);
+        true -> [{{Id, Who2}, Msg, Prop, State}] ++ deleteMsgs(Who1, Qt)
     end.
 
 orderedInsert(V, []) ->
@@ -93,6 +107,23 @@ propose(Pid, Id, Msg) ->
     receive
         Proposal -> Pid ! {proposal, node(), Proposal}
     end.
+
+loopMonitor() ->
+    receive
+        {nodedown, Who} ->
+            monitor_node(Who, false),
+            net_kernel:disconnect(Who),
+            loopMonitor();
+        fin -> ok;
+        _ -> io:format("RECV CUALCA NODES~n"),
+            serverReceiver()
+    end.
+
+nodesMonitor() ->
+    lists:foreach(fun (X) ->
+                    monitor_node(X, true)
+                end, nodes()),
+    loopMonitor().
 
 serverReceiver() ->
     receive
