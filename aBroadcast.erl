@@ -25,6 +25,7 @@ queueReceiver(Q, A, P) ->
         {agree, Id, Msg, {A1, A2}} ->
             loopPQueue(orderedInsert({Id, Msg, {A1, A2}, true}, lists:keydelete(Id, 1, Q)), max(A, A1), P);
         {delete, Who} ->
+            io:format("ELIMINANDO ~p ~n", [Who]),
             loopPQueue(deleteMsgs(Who, Q), A, P);
         fin -> ok;
         _ -> io:format("RECV CUALCA QUEUE ~n")
@@ -34,6 +35,7 @@ loopPQueue(Q, A, P) ->
     if length(Q) /= 0 -> 
         [{Idc, Msgc, _, State}|Qt] = Q,
         if State -> 
+            io:format("HACIENDO DELIVERY DE ~p ~p ~n", [Idc, Msgc]),
             msgsHandler ! {Idc, Msgc},
             loopPQueue(Qt, A, P);
             true -> queueReceiver(Q, A, P)
@@ -44,7 +46,6 @@ loopPQueue(Q, A, P) ->
 deleteMsgs(_, []) ->
     [];
 deleteMsgs(Who1, [{{Id, Who2}, Msg, Prop, State}|Qt]) ->
-    io:format("Comparandado ~p ~p ~n", [Who1, Who2]),
     if not State and Who1 == Who2 ->
         deleteMsgs(Who1, Qt);
         true -> [{{Id, Who2}, Msg, Prop, State}] ++ deleteMsgs(Who1, Qt)
@@ -89,6 +90,7 @@ proposalsCompare({A1, A2}, {P1, P2}) ->
 
 atomicBroadcast(Id, Msg) -> 
     pQueue ! {propose, self(), Id, Msg},
+    io:format("BROADCASTEANDO ~p ~p ~n", [Id, Msg]),
     receive
         Proposal -> 
             lists:foreach(fun (X) -> 
@@ -96,6 +98,7 @@ atomicBroadcast(Id, Msg) ->
                             monitor_node(X, true)
                         end, nodes()),
             AgreedValue = receiveProposals(length(nodes()), Proposal),
+            io:format("QUE PIJA PASA ~p ~n", [AgreedValue]),
             pQueue ! {agree, Id, Msg, AgreedValue},
             lists:foreach(fun (X) -> 
                             {serverReceiver, X} ! {agreedRequest, Id, Msg, AgreedValue}
@@ -111,12 +114,13 @@ propose(Pid, Id, Msg) ->
 loopMonitor() ->
     receive
         {nodedown, Who} ->
+            pQueue ! {delete, Who},
             monitor_node(Who, false),
             net_kernel:disconnect(Who),
             loopMonitor();
         fin -> ok;
         _ -> io:format("RECV CUALCA NODES~n"),
-            serverReceiver()
+            loopMonitor()
     end.
 
 nodesMonitor() ->
@@ -131,6 +135,7 @@ serverReceiver() ->
             spawn(?MODULE, propose, [Pid, Id, Msg]),
             serverReceiver();
         {agreedRequest, Id, Msg, AgreedValue} -> 
+            io:format("RECIBI UNA AGREE REQUEST ~p ~p ~p ~n", [Id, Msg, AgreedValue]),
             pQueue ! {agree, Id, Msg, AgreedValue},
             serverReceiver();
         fin -> ok;

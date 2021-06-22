@@ -89,11 +89,11 @@ loopLedger(Ledger) ->
 
 loopOperations() ->
     receive
-        {{Pid, C, _}, get} -> 
-            getHandler ! {get, {Pid, C}},
+        {{Id, _}, get} -> 
+            getHandler ! {get, Id},
             loopOperations();
-        {{Pid, C, _}, {append, Data}} -> 
-            appendHandler ! {append, {Pid, C}, Data},
+        {{Id, _}, {append, Data}} -> 
+            appendHandler ! {append, Id, Data},
             loopOperations();
         fin -> ok;
         _ -> loopOperations()
