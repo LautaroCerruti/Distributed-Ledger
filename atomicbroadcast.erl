@@ -29,7 +29,7 @@ looppqueue(Q, A, P) ->
     if length(Q) /= 0 -> 
         [{Idc, Msjc, _, State}|Qt] = Q,
         if State -> 
-            operationsHandler ! {Idc, Msjc},
+            msgsHandler ! {Idc, Msjc},
             looppqueue(Qt, A, P);
             true -> queueReceiver(Q, A, P)
         end;
@@ -103,5 +103,6 @@ serverReceiver() ->
             pqueue ! {agree, Id, Msj, AgreedValue},
             serverReceiver();
         fin -> ok;
-        _ -> io:format("RECV CUALCA SERVER~n")
+        _ -> io:format("RECV CUALCA SERVER~n"),
+            serverReceiver()
     end.
