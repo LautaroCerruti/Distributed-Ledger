@@ -1,5 +1,5 @@
--module(distributedledgerserver).
--import(atomicbroadcast, [atomicBroadcast/2]).
+-module(dls).
+-import(aBroadcast, [atomicBroadcast/2]).
 -export([start/0, stop/0]).
 -export([clientReceiver/0, loopOperations/0, loopGet/1, loopAppend/1, loopLedger/1]).
 -export([makeAppend/2, makeGet/1]).

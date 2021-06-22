@@ -1,36 +1,36 @@
--module(atomicbroadcast).
+-module(aBroadcast).
 -export([start/0, stop/0]).
--export([looppqueue/3, serverReceiver/0]).
+-export([loopPQueue/3, serverReceiver/0]).
 -export([atomicBroadcast/2, propose/3]).
 
 start() ->
-    register(pqueue, spawn(?MODULE, looppqueue, [[], 0, 0])),
+    register(pQueue, spawn(?MODULE, loopPQueue, [[], 0, 0])),
     register(serverReceiver, spawn(?MODULE, serverReceiver, [])).
 
 stop() ->
-    pqueue ! fin,
+    pQueue ! fin,
     serverReceiver ! fin,
-    unregister(pqueue),
+    unregister(pQueue),
     unregister(serverReceiver).
 
 queueReceiver(Q, A, P) ->
     receive
-        {propose, Pid, Id, Msj} -> 
+        {propose, Pid, Id, Msg} -> 
             Prop = max(A, P) + 1, 
             Pid ! {Prop, node()},
-            looppqueue(Q++[{Id, Msj, {Prop, node()}, false}], A, Prop);
-        {agree, Id, Msj, {A1, A2}} ->
-            looppqueue(orderedInsert({Id, Msj, {A1, A2}, true}, lists:keydelete(Id, 1, Q)), max(A, A1), P);
+            loopPQueue(Q++[{Id, Msg, {Prop, node()}, false}], A, Prop);
+        {agree, Id, Msg, {A1, A2}} ->
+            loopPQueue(orderedInsert({Id, Msg, {A1, A2}, true}, lists:keydelete(Id, 1, Q)), max(A, A1), P);
         fin -> ok;
         _ -> io:format("RECV CUALCA QUEUE ~n")
     end.
 
-looppqueue(Q, A, P) ->
+loopPQueue(Q, A, P) ->
     if length(Q) /= 0 -> 
-        [{Idc, Msjc, _, State}|Qt] = Q,
+        [{Idc, Msgc, _, State}|Qt] = Q,
         if State -> 
-            operationsHandler ! {Idc, Msjc},
-            looppqueue(Qt, A, P);
+            operationsHandler ! {Idc, Msgc},
+            loopPQueue(Qt, A, P);
             true -> queueReceiver(Q, A, P)
         end;
         true -> queueReceiver(Q, A, P)
@@ -38,11 +38,11 @@ looppqueue(Q, A, P) ->
 
 orderedInsert(V, []) ->
     [V];
-orderedInsert({Id1, Msj1, A, State1}, [{Id2, Msj2, P, State2}|TL]) ->
+orderedInsert({Id1, Msg1, A, State1}, [{Id2, Msg2, P, State2}|TL]) ->
     Comparison = proposalsCompare(A, P), 
     if
-        Comparison > 0 -> [{Id2, Msj2, P, State2}] ++ orderedInsert({Id1, Msj1, A, State1}, TL);
-        true -> [{Id1, Msj1, A, State1}, {Id2, Msj2, P, State2}] ++ TL
+        Comparison > 0 -> [{Id2, Msg2, P, State2}] ++ orderedInsert({Id1, Msg1, A, State1}, TL);
+        true -> [{Id1, Msg1, A, State1}, {Id2, Msg2, P, State2}] ++ TL
     end.
 
 receiveProposals(0, P) ->
@@ -73,34 +73,34 @@ proposalsCompare({A1, A2}, {P1, P2}) ->
             end
     end.
 
-atomicBroadcast(Id, Msj) -> 
-    pqueue ! {propose, self(), Id, Msj},
+atomicBroadcast(Id, Msg) -> 
+    pQueue ! {propose, self(), Id, Msg},
     receive
         Proposal -> 
             lists:foreach(fun (X) -> 
-                            {serverReceiver, X} ! {proposeRequest, self(), Id, Msj},
+                            {serverReceiver, X} ! {proposeRequest, self(), Id, Msg},
                             monitor_node(X, true)
                         end, nodes()),
             AgreedValue = receiveProposals(length(nodes()), Proposal),
-            pqueue ! {agree, Id, Msj, AgreedValue},
+            pQueue ! {agree, Id, Msg, AgreedValue},
             lists:foreach(fun (X) -> 
-                            {serverReceiver, X} ! {agreedRequest, Id, Msj, AgreedValue}
+                            {serverReceiver, X} ! {agreedRequest, Id, Msg, AgreedValue}
                         end, nodes())
     end.
 
-propose(Pid, Id, Msj) ->
-    pqueue ! {propose, self(), Id, Msj},
+propose(Pid, Id, Msg) ->
+    pQueue ! {propose, self(), Id, Msg},
     receive
         Proposal -> Pid ! {proposal, node(), Proposal}
     end.
 
 serverReceiver() ->
     receive
-        {proposeRequest, Pid, Id, Msj} -> 
-            spawn(?MODULE, propose, [Pid, Id, Msj]),
+        {proposeRequest, Pid, Id, Msg} -> 
+            spawn(?MODULE, propose, [Pid, Id, Msg]),
             serverReceiver();
-        {agreedRequest, Id, Msj, AgreedValue} -> 
-            pqueue ! {agree, Id, Msj, AgreedValue},
+        {agreedRequest, Id, Msg, AgreedValue} -> 
+            pQueue ! {agree, Id, Msg, AgreedValue},
             serverReceiver();
         fin -> ok;
         _ -> io:format("RECV CUALCA SERVER~n")
