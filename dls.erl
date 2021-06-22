@@ -5,19 +5,19 @@
 -export([makeAppend/2, makeGet/1]).
 
 start() ->
-    register(operationsHandler, spawn(?MODULE, loopOperations, [])),
+    register(msgsHandler, spawn(?MODULE, loopOperations, [])),
     register(getHandler, spawn(?MODULE, loopGet, [[]])),
     register(appendHandler, spawn(?MODULE, loopAppend, [[]])),
     register(ledgerHandler, spawn(?MODULE, loopLedger, [[]])),
     register(clientReceiver, spawn(?MODULE, clientReceiver, [])).
 
 stop() ->
-    operationsHandler ! fin,
+    msgsHandler ! fin,
     getHandler ! fin,
     appendHandler ! fin,
     ledgerHandler ! fin,
     clientReceiver ! fin,
-    unregister(operationsHandler),
+    unregister(msgsHandler),
     unregister(getHandler),
     unregister(appendHandler),
     unregister(ledgerHandler),
